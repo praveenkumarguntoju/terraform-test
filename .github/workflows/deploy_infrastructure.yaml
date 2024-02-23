@@ -39,9 +39,6 @@ jobs:
         terraform_version: latest
         terraform_wrapper: false
 
-    - name: Terraform Init
-      run: terraform init
-
     - name: Terraform Validate
       id: validate
       run: |
