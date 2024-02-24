@@ -30,7 +30,7 @@ jobs:
       name: ${{ matrix.environment }}
     strategy:
       matrix:
-        environment: [dev, uat, prod]
+        environment: [dev]
     outputs:
       validationResult: ${{ steps.validate.outputs.result }}
 
