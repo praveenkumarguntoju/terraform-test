@@ -80,7 +80,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: [dev]
+        environment: [dev, uat, dev]
 
     steps:
     - name: Checkout
