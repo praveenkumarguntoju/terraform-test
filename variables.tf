@@ -21,19 +21,3 @@ variable "azure-region" {
     }
 }
 
-variable "node_sku" {
-    type = string
-    description = "The SKU of the VMs to run the Kubernetes agent pool on"
-    default = "Standard_DS2_v2"
-}
-
-variable "vm_username" {
-  type        = string
-  description = "Username for vm-1"
-}
-
-variable "vm_password" {
-  type        = string
-  sensitive   = true
-  description = "Password for vm-1"
-}
