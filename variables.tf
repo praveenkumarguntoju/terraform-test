@@ -1,8 +1,3 @@
-variable "solution-name" {
-    type = string
-    description = "The name of the solution"
-}
-
 variable "environment"{
     type = string
     description = "The Name of the environment you are deploying to"
