@@ -15,4 +15,3 @@ variable "azure-region" {
         error_message = "Please ensure that your region matches the internal azure region name: https://github.com/claranet/terraform-azurerm-regions/blob/master/REGIONS.md"
     }
 }
-

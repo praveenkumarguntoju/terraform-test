@@ -26,6 +26,11 @@ jobs:
   terraform-validate:
     name: 'Terraform Validate'
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ matrix.environment }}
+    strategy:
+      matrix:
+        environment: [dev]
     outputs:
       validationResult: ${{ steps.validate.outputs.result }}
 
@@ -38,9 +43,26 @@ jobs:
       with:
         terraform_version: latest
         terraform_wrapper: false
+        
+    - name: OIDC Login to Azure Public Cloud
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+       # Run az commands to confirm sub access
+    - name: 'Run az commands'
+      run: |
+        az account show
 
     - name: Terraform Init
-      run: terraform init
+      run:  terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
+
+    # Run a Terraform fmt
+    - name: Terraform format
+      id: fmt
+      run: terraform fmt -check
 
     - name: Terraform Validate
       id: validate
@@ -58,7 +80,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: [dev, uat, prod]
+        environment: [dev]
 
     steps:
     - name: Checkout
@@ -83,7 +105,7 @@ jobs:
       id: tf-plan
       run: |
         export exitcode=0
-        terraform plan -detailed-exitcode -no-color -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" || export exitcode=$?
+        terraform plan -detailed-exitcode -no-color -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars || export exitcode=$?
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
         if [ $exitcode -eq 1 ]; then
           echo "Terraform Plan Failed!"
