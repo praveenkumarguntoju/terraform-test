@@ -1,4 +1,4 @@
-name: 'Terraform CI/CD'
+name: Terraform CI/CD
 
 on:
   push:
@@ -15,18 +15,10 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
-  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
-
 jobs:
   terraform-plan-apply:
     name: 'Terraform Format & Validate & Plan & Apply'
     runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ matrix.environment }}
 
     strategy:
       matrix:
@@ -41,32 +33,42 @@ jobs:
       with:
         terraform_wrapper: false
 
+    - name: Set Environment Secrets
+      run: |
+        if [ "${{ matrix.environment }}" == 'dev' ]; then
+          export ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
+          export ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          export ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
+          export AUTO_APPROVE_FLAG="-auto-approve"
+        else
+          export ARM_CLIENT_ID=${{ secrets.PROD_AZURE_CLIENT_ID }}
+          export ARM_SUBSCRIPTION_ID=${{ secrets.PROD_AZURE_SUBSCRIPTION_ID }}
+          export ARM_TENANT_ID=${{ secrets.PROD_AZURE_TENANT_ID }}
+          export AUTO_APPROVE_FLAG=""
+        fi
+
     - name: OIDC Login to Azure Public Cloud
       uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        client-id: ${{ env.ARM_CLIENT_ID }}
+        tenant-id: ${{ env.ARM_TENANT_ID }}
+        subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
     - name: Terraform Init with Backend Config
       run: terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
 
-    - name: Terraform format
-      id: fmt
+    - name: Terraform Format
       run: terraform fmt -check
 
     - name: Terraform Validate
-      id: validate
-      run: |
-        terraform validate
-        echo "result=success" >> $GITHUB_OUTPUT
-        if [ $exitcode -eq 1 ]; then
-          echo "Terraform Validation Failed!"
-          exit 1
-        fi
+      run: terraform validate
 
-    - name: Terraform Plan with Detailed Exit Code
-      id: tf-plan
+    - name: Terraform Plan
+      run: |
+        terraform plan -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars
+
+    - name: Publish Terraform Plan
+       id: tf-plan
       run: |
         export exitcode=0
         terraform plan -detailed-exitcode -no-color -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars || export exitcode=$?
@@ -104,5 +106,9 @@ jobs:
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' && steps.tf-plan.outputs.exitcode == '2'
-      run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve -auto-approve tfplan
+      if: github.ref == 'refs/heads/main' && matrix.environment == 'prod'
+      run: terraform apply tfplan
+
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' && matrix.environment == 'dev'
+      run: terraform apply $AUTO_APPROVE_FLAG tfplan
