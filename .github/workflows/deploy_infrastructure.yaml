@@ -9,12 +9,6 @@ on:
     branches:
       - main
       - dev
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (dev or prod)'
-        required: true
-        default: 'dev'
 
 permissions:
   id-token: write
@@ -27,18 +21,16 @@ env:
   ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
 
 jobs:
-
   terraform-plan-apply:
-    name: 'Terraform Plan & Apply'
+    name: 'Terraform Format & Validate & Plan & Apply'
     runs-on: ubuntu-latest
-    
-    environment: 
-      name: ${{ github.event.inputs.environment }}
-      url: ${{ steps.deploy.outputs.deployment-url }}
+
+    environment:
+      name: ${{ matrix.environment }}
 
     strategy:
       matrix:
-        environment: [dev,prod]
+        environment: [dev, prod]
 
     steps:
     - name: Checkout
@@ -69,7 +61,7 @@ jobs:
         terraform validate
         echo "result=success" >> $GITHUB_OUTPUT
         if [ $exitcode -eq 1 ]; then
-          echo "Terraform validation Failed!"
+          echo "Terraform Validation Failed!"
           exit 1
         fi
 
@@ -112,5 +104,5 @@ jobs:
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
 
     - name: Terraform Apply
-      if: github.event.inputs.environment == 'dev' || (github.event.inputs.environment == 'prod' && github.event_name != 'workflow_dispatch')
-      run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve tfplan
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' && steps.tf-plan.outputs.exitcode == '2'
+      run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve -auto-approve tfplan
