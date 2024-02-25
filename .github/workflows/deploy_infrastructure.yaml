@@ -21,64 +21,17 @@ env:
   ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
 
 jobs:
-  terraform-validate:
-    name: 'Terraform Validate'
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ matrix.environment }}
-    strategy:
-      matrix:
-        environment: [dev]
-    outputs:
-      validationResult: ${{ steps.validate.outputs.result }}
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: latest
-        terraform_wrapper: false
-        
-    - name: OIDC Login to Azure Public Cloud
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-       # Run az commands to confirm sub access
-    - name: 'Run az commands'
-      run: |
-        az account show
-
-    - name: Terraform Init
-      run:  terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
-
-    # Run a Terraform fmt
-    - name: Terraform format
-      id: fmt
-      run: terraform fmt -check
-
-    - name: Terraform Validate
-      id: validate
-      run: |
-        terraform validate
-        echo "result=success" >> $GITHUB_OUTPUT
 
   terraform-plan-apply:
     name: 'Terraform Plan & Apply'
     runs-on: ubuntu-latest
-    needs: terraform-validate
-    if: needs.terraform-validate.outputs.validationResult == 'success'
+    
     environment:
       name: ${{ matrix.environment }}
 
     strategy:
       matrix:
-        environment: [dev, uat, prod]
+        environment: [dev,prod]
 
     steps:
     - name: Checkout
@@ -98,6 +51,20 @@ jobs:
 
     - name: Terraform Init with Backend Config
       run: terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
+
+    - name: Terraform format
+      id: fmt
+      run: terraform fmt -check
+
+    - name: Terraform Validate
+      id: validate
+      run: |
+        terraform validate
+        echo "result=success" >> $GITHUB_OUTPUT
+        if [ $exitcode -eq 1 ]; then
+          echo "Terraform validation Failed!"
+          exit 1
+        fi
 
     - name: Terraform Plan with Detailed Exit Code
       id: tf-plan
@@ -138,5 +105,5 @@ jobs:
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/dev' && steps.tf-plan.outputs.exitcode == '2'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' && steps.tf-plan.outputs.exitcode == '2'
       run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve -auto-approve tfplan
