@@ -5,12 +5,10 @@ on:
     branches:
       - main
       - dev
-      - uat
   pull_request:
     branches:
       - main
       - dev
-      - uat
 
 permissions:
   id-token: write
