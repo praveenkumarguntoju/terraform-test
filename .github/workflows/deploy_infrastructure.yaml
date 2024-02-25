@@ -63,10 +63,6 @@ jobs:
     - name: Terraform Validate
       run: terraform validate
 
-    - name: Terraform Plan
-      run: |
-        terraform plan -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars
-
     - name: Publish Terraform Plan
       id: tf-plan
       run: |
