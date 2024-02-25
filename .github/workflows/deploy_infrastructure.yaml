@@ -68,7 +68,7 @@ jobs:
         terraform plan -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars
 
     - name: Publish Terraform Plan
-       id: tf-plan
+      id: tf-plan
       run: |
         export exitcode=0
         terraform plan -detailed-exitcode -no-color -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars || export exitcode=$?
