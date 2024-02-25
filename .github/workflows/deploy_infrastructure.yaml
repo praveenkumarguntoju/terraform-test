@@ -9,6 +9,12 @@ on:
     branches:
       - main
       - dev
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: 'dev'
 
 permissions:
   id-token: write
@@ -26,8 +32,9 @@ jobs:
     name: 'Terraform Plan & Apply'
     runs-on: ubuntu-latest
     
-    environment:
-      name: ${{ matrix.environment }}
+    environment: 
+      name: ${{ github.event.inputs.environment }}
+      url: ${{ steps.deploy.outputs.deployment-url }}
 
     strategy:
       matrix:
@@ -105,5 +112,5 @@ jobs:
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' && steps.tf-plan.outputs.exitcode == '2'
-      run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve -auto-approve tfplan
+      if: github.event.inputs.environment == 'dev' || (github.event.inputs.environment == 'prod' && github.event_name != 'workflow_dispatch')
+      run: terraform apply -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" -auto-approve tfplan
