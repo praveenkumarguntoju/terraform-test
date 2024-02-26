@@ -47,6 +47,13 @@ jobs:
           export ARM_TENANT_ID=${{ secrets.PROD_AZURE_TENANT_ID }}
           export AUTO_APPROVE_FLAG=""
         fi
+        
+    - name: Debug Environment
+      run: |
+        echo "ARM_CLIENT_ID: $ARM_CLIENT_ID"
+        echo "ARM_SUBSCRIPTION_ID: $ARM_SUBSCRIPTION_ID"
+        echo "ARM_TENANT_ID: $ARM_TENANT_ID"
+        echo "AUTO_APPROVE_FLAG: $AUTO_APPROVE_FLAG"
 
     - name: OIDC Login to Azure Public Cloud
       uses: azure/login@v1
