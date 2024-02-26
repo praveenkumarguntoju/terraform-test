@@ -37,10 +37,10 @@ jobs:
     - name: Set Environment Secrets
       run: |
         if [ "${{ matrix.environment }}" == 'dev' ]; then
-          export ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
-          export ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          export ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
-          export AUTO_APPROVE_FLAG="-auto-approve"
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "AUTO_APPROVE_FLAG=-auto-approve" >> $GITHUB_ENV
         else
           export ARM_CLIENT_ID=${{ secrets.PROD_AZURE_CLIENT_ID }}
           export ARM_SUBSCRIPTION_ID=${{ secrets.PROD_AZURE_SUBSCRIPTION_ID }}
