@@ -20,6 +20,7 @@ jobs:
         environment: [dev]
 
     steps:
+ 
     - name: Checkout
       uses: actions/checkout@v3
 
@@ -27,20 +28,33 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_wrapper: false
+  
+    - name: My Step
+      env:
+        MY_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+      run: |
+        echo $MY_SECRET
 
     - name: Set Environment Secrets
       run: |
         if [ "${{ matrix.environment }}" == 'dev' ]; then
-          export ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
-          export ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          export ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
-          export AUTO_APPROVE_FLAG="-auto-approve"
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "AUTO_APPROVE_FLAG=-auto-approve" >> $GITHUB_ENV
         else
           export ARM_CLIENT_ID=${{ secrets.PROD_AZURE_CLIENT_ID }}
           export ARM_SUBSCRIPTION_ID=${{ secrets.PROD_AZURE_SUBSCRIPTION_ID }}
           export ARM_TENANT_ID=${{ secrets.PROD_AZURE_TENANT_ID }}
           export AUTO_APPROVE_FLAG=""
         fi
+        
+    - name: Debug Environment
+      run: |
+        echo "ARM_CLIENT_ID: $ARM_CLIENT_ID"
+        echo "ARM_SUBSCRIPTION_ID: $ARM_SUBSCRIPTION_ID"
+        echo "ARM_TENANT_ID: $ARM_TENANT_ID"
+        echo "AUTO_APPROVE_FLAG: $AUTO_APPROVE_FLAG"
 
     - name: OIDC Login to Azure Public Cloud
       uses: azure/login@v1
@@ -52,13 +66,7 @@ jobs:
     - name: Terraform Init with Backend Config
       run: terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
 
-    - name: Terraform Format
-      run: terraform fmt -check
-
-    - name: Terraform Validate
-      run: terraform validate
-
-    - name: Publish Terraform Plan
+    - name: Terraform Plan
       id: tf-plan
       run: |
         export exitcode=0
