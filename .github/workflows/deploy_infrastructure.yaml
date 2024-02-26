@@ -25,13 +25,7 @@ jobs:
         environment: [dev, prod]
 
     steps:
-    
-    - name: Dump GitHub AZURE_CLIENT_ID
-      run: |
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID  }}
-          run: echo "${{ secrets.AZURE_CLIENT_ID  }}"
-    
+ 
     - name: Checkout
       uses: actions/checkout@v3
 
