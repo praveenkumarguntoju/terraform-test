@@ -33,6 +33,12 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_wrapper: false
+  
+    - name: My Step
+      env:
+        MY_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
+      run: |
+        echo $MY_SECRET
 
     - name: Set Environment Secrets
       run: |
