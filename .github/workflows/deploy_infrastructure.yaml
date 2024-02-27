@@ -49,7 +49,10 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_wrapper: false
-    #
+
+    - name: Terraform Format
+      run: terraform fmt
+      
     - name: OIDC Login to Azure Public Cloud
       uses: azure/login@v1
       with:
