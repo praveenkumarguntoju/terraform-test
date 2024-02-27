@@ -1,105 +1,149 @@
-name: Terraform CI/CD
+name: 'Terraform Plan/Apply'
 
 on:
   push:
     branches:
-      - dev
+    #update this to the correct branch (main, dev etc)
+    - example-branch
 
+
+#Special permissions required for OIDC authentication
 permissions:
   id-token: write
   contents: read
   pull-requests: write
 
+#These environment variables are used by the terraform azure provider to setup OIDC authenticate. The should be set in the github repos actions secrets
+#These will be federated to the azure sub for each environment. 
+env:
+  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.NON_PROD_AZURE_SUBSCRIPTION_ID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+
 jobs:
-  terraform-plan-apply:
-    name: 'Terraform Format & Validate & Plan & Apply'
+  terraform-plan:
+    name: 'Terraform Plan'
+    #make sure you have an environment called non prod, or update this to be your github environment name
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         environment: [dev]
+    ## If your terraform scripts are within a folder in the repo, set your working directory to that location (else it will fail to initialise terraform)
+    #defaults:
+      #run:
+        #working-directory: ./deploy/infra
+    env:
+      #this is needed since we are running terraform with read-only permissions
+      ARM_SKIP_PROVIDER_REGISTRATION: true
+    outputs:
+      tfplanExitCode: ${{ steps.tf-plan.outputs.exitcode }}
 
     steps:
- 
+    # Checkout the repository to the GitHub Actions runner
     - name: Checkout
       uses: actions/checkout@v3
 
+    # Install the latest version of the Terraform CLI
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_wrapper: false
-  
-    - name: My Step
-      env:
-        MY_SECRET: ${{ secrets.AZURE_CLIENT_ID }}
-      run: |
-        echo $MY_SECRET
-
-    - name: Set Environment Secrets
-      run: |
-        if [ "${{ matrix.environment }}" == 'dev' ]; then
-          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-          echo "AUTO_APPROVE_FLAG=-auto-approve" >> $GITHUB_ENV
-        else
-          export ARM_CLIENT_ID=${{ secrets.PROD_AZURE_CLIENT_ID }}
-          export ARM_SUBSCRIPTION_ID=${{ secrets.PROD_AZURE_SUBSCRIPTION_ID }}
-          export ARM_TENANT_ID=${{ secrets.PROD_AZURE_TENANT_ID }}
-          export AUTO_APPROVE_FLAG=""
-        fi
-        
-    - name: Debug Environment
-      run: |
-        echo "ARM_CLIENT_ID: $ARM_CLIENT_ID"
-        echo "ARM_SUBSCRIPTION_ID: $ARM_SUBSCRIPTION_ID"
-        echo "ARM_TENANT_ID: $ARM_TENANT_ID"
-        echo "AUTO_APPROVE_FLAG: $AUTO_APPROVE_FLAG"
-
+    #
     - name: OIDC Login to Azure Public Cloud
       uses: azure/login@v1
       with:
-        client-id: ${{ env.ARM_CLIENT_ID }}
-        tenant-id: ${{ env.ARM_TENANT_ID }}
-        subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.NON_PROD_AZURE_SUBSCRIPTION_ID }} 
+  
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run:  terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
 
-    - name: Terraform Init with Backend Config
-      run: terraform init -backend-config=./environments/${{ matrix.environment }}/backend.tfvars
-
+    # Generates an execution plan for Terraform
+    # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
+    # All variables come from the .tfvars file, other than the VM_PASSWORD which comes from a secret in github. make sure you add this variable
     - name: Terraform Plan
       id: tf-plan
       run: |
         export exitcode=0
-        terraform plan -detailed-exitcode -no-color -out=tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" || export exitcode=$?
-        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-        if [ $exitcode -eq 1 ]; then
-          echo "Terraform Plan Failed!"
-          exit 1
-        fi
+        terraform plan -detailed-exitcode -no-color -out tfplan -var-file=./environments/${{ matrix.environment }}/terraform.tfvars -var="vm_password=${{ secrets.VM_PASSWORD }}" || export exitcode=$?
 
+        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+        
+        if [ $exitcode -eq 1 ]; then
+          echo Terraform Plan Failed!
+          exit 1
+        else 
+          exit 0
+        fi
+        
+    # Save plan to artifacts  
     - name: Publish Terraform Plan
       uses: actions/upload-artifact@v3
       with:
         name: tfplan
         path: tfplan
-
-    - name: Create String Output of Terraform Plan
+        
+    # Create string output of Terraform Plan
+    - name: Create String Output
       id: tf-plan-string
       run: |
         TERRAFORM_PLAN=$(terraform show -no-color tfplan)
+        
         delimiter="$(openssl rand -hex 8)"
         echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
         echo "## Terraform Plan Output" >> $GITHUB_OUTPUT
         echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
         echo '```terraform' >> $GITHUB_OUTPUT
         echo "$TERRAFORM_PLAN" >> $GITHUB_OUTPUT
         echo '```' >> $GITHUB_OUTPUT
         echo "</details>" >> $GITHUB_OUTPUT
         echo "${delimiter}" >> $GITHUB_OUTPUT
-
+        
+    # Publish Terraform Plan as task summary
     - name: Publish Terraform Plan to Task Summary
-      if: ${{ steps.tf-plan.outputs.exitcode }} == '2'
       env:
         SUMMARY: ${{ steps.tf-plan-string.outputs.summary }}
       run: |
         echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+
+  #apply
+  terraform-apply:
+    name: 'Terraform Apply'
+    if: needs.terraform-plan.outputs.tfplanExitCode == 2
+    runs-on: ubuntu-latest
+     ## If your terraform scripts are within a folder in the repo, set your working directory to that location (else it will fail to initialise terraform)
+    #defaults:
+      #run:
+        #working-directory: ./deploy/infra
+    environment: non-prod
+    needs: [terraform-plan]
+    
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # Install the latest version of the Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_wrapper: false
+    - name: OIDC Login to Azure Public Cloud
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.NON_PROD_AZURE_SUBSCRIPTION_ID }} 
+  
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init
+
+    # Generates an execution plan for Terraform
+    # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes
+      
