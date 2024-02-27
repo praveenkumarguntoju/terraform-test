@@ -4,7 +4,7 @@ on:
   push:
     branches:
     #update this to the correct branch (main, dev etc)
-    - example-branch
+    - dev
 
 
 #Special permissions required for OIDC authentication
